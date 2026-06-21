@@ -75,8 +75,25 @@
           <button type="button" class="chip chip-sm" data-prompt="Ubah nada tulisan ini: ">↻ Ubah nada</button>
           <button type="button" class="chip chip-sm" data-prompt="Bantu saya membalas pesan ini: ">💬 Balas pesan</button>
         </div>
+
+        <!-- preview lampiran (v2) -->
+        <div class="attachment" id="attachment" hidden>
+          <div class="attachment-inner">
+            <div class="attachment-thumb" id="attachment-thumb"></div>
+            <span class="attachment-name" id="attachment-name"></span>
+            <button type="button" class="attachment-remove" id="attachment-remove" aria-label="Hapus lampiran">✕</button>
+          </div>
+        </div>
+
+        <!-- error validasi lampiran (v2) -->
+        <div class="composer-error" id="composer-error" role="alert" hidden>
+          <span class="composer-error-box" id="composer-error-text"></span>
+        </div>
+
         <form id="chat-form" class="input-row">
-          <input type="text" id="user-input" placeholder="Tulis sesuatu…" autocomplete="off" required />
+          <button type="button" id="attach-btn" class="attach" aria-label="Lampirkan file">📎</button>
+          <input type="file" id="file-input" hidden accept="image/*,application/pdf,audio/*" aria-hidden="true" tabindex="-1" />
+          <input type="text" id="user-input" placeholder="Tulis sesuatu…" autocomplete="off" />
           <button type="submit" id="send-btn" class="send" aria-label="Kirim">➤</button>
         </form>
       </footer>

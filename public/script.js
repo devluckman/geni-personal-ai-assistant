@@ -1,7 +1,9 @@
 /* =========================================================
    Geni — Frontend logic
    Kontrak API:
-     POST /api/chat  body: { conversation: [{role, text}, ...] }
+     POST /api/chat  body: { conversation: [{role, text}, ...], file? }
+       file (opsional, sekali pakai untuk turn ini):
+         { mimeType, data (base64 mentah), name }
      200 -> { result: "<jawaban AI>" }
    ========================================================= */
 
@@ -13,6 +15,16 @@ const welcome     = document.getElementById('welcome');
 const toneGroup   = document.getElementById('tone');
 const newChatBtn  = document.getElementById('new-chat');
 
+// Lampiran (v2)
+const attachBtn     = document.getElementById('attach-btn');
+const fileInput     = document.getElementById('file-input');
+const attachmentEl  = document.getElementById('attachment');
+const attachThumb   = document.getElementById('attachment-thumb');
+const attachName    = document.getElementById('attachment-name');
+const attachRemove  = document.getElementById('attachment-remove');
+const errorEl       = document.getElementById('composer-error');
+const errorText     = document.getElementById('composer-error-text');
+
 // Riwayat percakapan untuk konteks multi-turn (dikirim utuh tiap request)
 let conversation = [];
 
@@ -21,6 +33,13 @@ let tone = 'formal';
 
 // Container pesan (dibuat saat pesan pertama, menggantikan welcome state)
 let chatInner = null;
+
+// Lampiran aktif: { file, mimeType, name, previewUrl } | null
+let attachedFile = null;
+
+// Filter default picker untuk tombol 📎 (semua modalitas)
+const DEFAULT_ACCEPT = 'image/*,application/pdf,audio/*';
+const MAX_FILE_BYTES = 14 * 1024 * 1024; // selaras dengan guard backend
 
 /* ---------- TONE TOGGLE ---------- */
 toneGroup.addEventListener('click', (e) => {
@@ -31,13 +50,48 @@ toneGroup.addEventListener('click', (e) => {
   btn.classList.add('active');
 });
 
-/* ---------- QUICK CHIPS (welcome + composer) ---------- */
-document.querySelectorAll('.chip').forEach((chip) => {
+/* ---------- QUICK CHIPS (prefill teks) ----------
+   Hanya chip TANPA data-accept. Chip multimodal (data-accept) ditangani terpisah
+   agar handler ini tidak ikut terpicu (lihat handler chip lampiran di bawah). */
+document.querySelectorAll('.chip:not([data-accept])').forEach((chip) => {
   chip.addEventListener('click', () => {
     input.value = chip.dataset.prompt || '';
+    clearError();
     input.focus();
   });
 });
+
+/* ---------- CHIP LAMPIRAN (data-accept): set filter + buka picker + prefill ---------- */
+document.querySelectorAll('.chip[data-accept]').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    if (chip.dataset.prompt) input.value = chip.dataset.prompt;
+    openPicker(chip.dataset.accept || DEFAULT_ACCEPT);
+  });
+});
+
+/* ---------- TOMBOL LAMPIRAN 📎 ---------- */
+attachBtn.addEventListener('click', () => openPicker(DEFAULT_ACCEPT));
+
+function openPicker(accept) {
+  fileInput.accept = accept || DEFAULT_ACCEPT;
+  fileInput.value = '';        // reset agar memilih file yang sama tetap memicu change
+  fileInput.click();
+}
+
+fileInput.addEventListener('change', () => {
+  const file = fileInput.files && fileInput.files[0];
+  if (!file) return;
+
+  const err = clientFileError(file);
+  if (err) {
+    showError(err);
+    fileInput.value = '';
+    return;
+  }
+  setAttachment(file);
+});
+
+attachRemove.addEventListener('click', clearAttachment);
 
 /* ---------- NEW CHAT ---------- */
 newChatBtn.addEventListener('click', () => {
@@ -46,6 +100,8 @@ newChatBtn.addEventListener('click', () => {
   chatBox.innerHTML = '';
   chatBox.appendChild(welcome);
   input.value = '';
+  clearAttachment();   // jangan bawa lampiran ke sesi baru
+  clearError();
   input.focus();
 });
 
@@ -53,27 +109,44 @@ newChatBtn.addEventListener('click', () => {
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
 
-  const userMessage = input.value.trim();
-  if (!userMessage) return;
+  const typed = input.value.trim();
+  // File-only diizinkan: lanjut bila ada teks ATAU ada lampiran
+  if (!typed && !attachedFile) return;
 
-  ensureChatInner();              // buang welcome state pada pesan pertama
-  appendMessage('user', userMessage);
+  const pending = attachedFile;                 // file untuk dibaca → base64
+  const fileMeta = pending
+    ? { name: pending.name, icon: iconForMime(pending.mimeType) }
+    : null;
 
-  // Sisipkan instruksi nada secara halus ke teks yang DIKIRIM ke backend,
-  // tanpa mengubah bubble yang ditampilkan ke user.
+  ensureChatInner();
+  appendMessage('user', typed, fileMeta);       // bubble: teks + indikator file
+
+  // Instruksi yang dikirim ke model (file-only memakai instruksi default).
+  const instruction = typed || 'Tolong bantu saya dengan lampiran ini.';
   const tonePrefix = `[Gunakan nada ${tone}] `;
-  conversation.push({ role: 'user', text: tonePrefix + userMessage });
+  conversation.push({ role: 'user', text: tonePrefix + instruction });
 
   input.value = '';
+  clearAttachment();        // lampiran sekali pakai: bersihkan dari UI
+  clearError();
   setSending(true);
 
   const thinkingEl = appendTyping();
 
   try {
+    let filePayload = null;
+    if (pending) {
+      filePayload = {
+        mimeType: pending.mimeType,
+        data: await fileToBase64(pending.file),
+        name: pending.name,
+      };
+    }
+
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ conversation }),
+      body: JSON.stringify({ conversation, file: filePayload }),
     });
 
     if (!res.ok) {
@@ -96,6 +169,84 @@ form.addEventListener('submit', async (e) => {
   }
 });
 
+/* ---------- LAMPIRAN: helpers ---------- */
+
+// Validasi ringan di klien (gerbang utama tetap di server). Mengembalikan pesan error | null.
+function clientFileError(file) {
+  const t = (file.type || '').toLowerCase();
+  const okType =
+    t.startsWith('image/') ||
+    t === 'application/pdf' ||
+    t === 'application/x-pdf' ||
+    t.startsWith('audio/');
+  if (!okType) return 'Format file tidak didukung. Gunakan gambar, PDF, atau audio.';
+  if (file.size > MAX_FILE_BYTES) return 'File terlalu besar. Maksimal 14 MB.';
+  return null;
+}
+
+function setAttachment(file) {
+  clearAttachment();   // ganti file sebelumnya → hanya satu file per pesan
+  const isImage = (file.type || '').startsWith('image/');
+  const previewUrl = isImage ? URL.createObjectURL(file) : null;
+  attachedFile = { file, mimeType: file.type, name: file.name, previewUrl };
+
+  attachThumb.innerHTML = '';
+  if (previewUrl) {
+    const img = document.createElement('img');
+    img.src = previewUrl;
+    img.alt = '';
+    img.className = 'attachment-thumb-img';
+    attachThumb.appendChild(img);
+  } else {
+    attachThumb.textContent = iconForMime(file.type);
+  }
+  attachName.textContent = file.name;
+  attachmentEl.hidden = false;
+  clearError();
+}
+
+function clearAttachment() {
+  if (attachedFile && attachedFile.previewUrl) {
+    URL.revokeObjectURL(attachedFile.previewUrl);
+  }
+  attachedFile = null;
+  attachmentEl.hidden = true;
+  attachThumb.innerHTML = '';
+  attachName.textContent = '';
+  fileInput.value = '';
+}
+
+function showError(msg) {
+  errorText.textContent = msg;
+  errorEl.hidden = false;
+}
+function clearError() {
+  errorEl.hidden = true;
+  errorText.textContent = '';
+}
+
+function iconForMime(mime) {
+  const m = (mime || '').toLowerCase();
+  if (m.startsWith('image/')) return '🖼';
+  if (m.startsWith('audio/')) return '🎤';
+  if (m === 'application/pdf' || m === 'application/x-pdf') return '📄';
+  return '📎';
+}
+
+// Baca File -> base64 mentah (tanpa prefix data: URL).
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      const comma = result.indexOf(',');
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error || new Error('read error'));
+    reader.readAsDataURL(file);
+  });
+}
+
 /* ---------- HELPERS ---------- */
 
 function ensureChatInner() {
@@ -106,8 +257,8 @@ function ensureChatInner() {
   chatBox.appendChild(chatInner);
 }
 
-// Tambahkan bubble pesan user / bot
-function appendMessage(sender, text) {
+// Tambahkan bubble pesan user / bot. fileMeta (opsional) menampilkan indikator lampiran.
+function appendMessage(sender, text, fileMeta) {
   const row = document.createElement('div');
   row.className = 'row ' + sender;
 
@@ -124,7 +275,18 @@ function appendMessage(sender, text) {
   } else {
     const bubble = document.createElement('div');
     bubble.className = 'bubble user';
-    bubble.textContent = text;
+    if (text) {
+      const span = document.createElement('span');
+      span.className = 'bubble-text';
+      span.textContent = text;
+      bubble.appendChild(span);
+    }
+    if (fileMeta) {
+      const pill = document.createElement('div');
+      pill.className = 'bubble-file';
+      pill.textContent = `${fileMeta.icon} ${fileMeta.name}`;
+      bubble.appendChild(pill);
+    }
     row.appendChild(bubble);
   }
 
@@ -204,6 +366,7 @@ function makeActions(bubble) {
 function setSending(state) {
   sendBtn.disabled = state;
   input.disabled = state;
+  attachBtn.disabled = state;
   if (!state) input.focus();
 }
 
