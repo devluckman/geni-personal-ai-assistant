@@ -32,6 +32,34 @@ terekspos ke browser. Frontend hanya menangani UI dan memanggil endpoint `/api/c
 - **UI "Hangat & Personal"** — sidebar, header gradien biru, welcome state dengan quick-action
   chips, bubble bot krem hangat + avatar `✦`, tombol **Salin** & **Tulis ulang**, indikator
   typing tiga titik, dan **Mulai obrolan baru**.
+- **Input multimodal (v2)** — lampirkan **gambar/screenshot, PDF, atau audio** lewat tombol 📎
+  atau task-chip; Geni membaca lampiran untuk membantu tugas tulis-menulis kerja.
+
+---
+
+## 📎 Input Multimodal (v2)
+
+> Fitur ini ada di branch **`geni-v2`**. Branch `main` tetap versi text-only.
+
+Selain teks, Geni bisa menerima **satu lampiran per pesan**:
+
+| Modalitas | Format didukung | Contoh kegunaan |
+|---|---|---|
+| Gambar / screenshot | PNG, JPEG, WebP | Baca screenshot chat → bantu balas / ubah nada |
+| Dokumen | PDF | Ringkas dokumen / ekstrak poin / draft balasan |
+| Audio / voice note | MP3, WAV, OGG, AAC | Transkrip & susun jadi pesan rapi |
+
+**Cara pakai:** klik tombol **📎** di composer (atau task-chip seperti *Ringkas dokumen* /
+*Balas screenshot* / *Voice note → pesan*), pilih file, lalu kirim — boleh dengan atau tanpa
+teks tambahan. Tone toggle tetap berlaku.
+
+**Catatan teknis:**
+- File dikirim **inline (base64)**; batas **±14 MB** per file (tetap di bawah batas request
+  inline Gemini 20 MB).
+- File bersifat **sekali pakai** — dikirim ke model hanya pada pesan saat dilampirkan; tindak
+  lanjut memakai jawaban teks Geni (hemat payload). Bila perlu detail asli lagi, lampirkan ulang.
+- Validasi tipe & ukuran dilakukan di frontend **dan** backend (allow-list MIME, normalisasi
+  alias, plus cek *magic-byte* untuk gambar/PDF).
 
 ---
 
@@ -103,6 +131,24 @@ Percakapan multi-turn. Frontend mengirim **seluruh riwayat** percakapan tiap req
 - `role`: `"user"` atau `"model"`.
 - `text`: isi pesan.
 
+**Lampiran opsional (v2)** — sertakan field `file` untuk turn berjalan (sekali pakai):
+
+```json
+{
+  "conversation": [ { "role": "user", "text": "Tolong ringkas dokumen ini." } ],
+  "file": {
+    "mimeType": "application/pdf",
+    "data": "<base64 mentah, tanpa prefix data:>",
+    "name": "laporan-q2.pdf"
+  }
+}
+```
+
+- `file` boleh dihilangkan (request text-only tetap bekerja seperti biasa).
+- `data`: isi file dalam base64 **tanpa** prefix `data:<mime>;base64,`.
+- Maksimum satu file per pesan; backend menempelkannya sebagai bagian (`inlineData`) ke pesan
+  user terakhir dan tidak menyimpannya di riwayat.
+
 **Response sukses** (`200`):
 
 ```json
@@ -114,6 +160,8 @@ Percakapan multi-turn. Frontend mengirim **seluruh riwayat** percakapan tiap req
 | Status | Kondisi | Body |
 |--------|---------|------|
 | `400` | `conversation` bukan array | `{ "message": "Field 'conversation' harus berupa array." }` |
+| `400` | Lampiran tidak valid / format tak didukung / terlalu besar / isi tak cocok tipe | `{ "message": "<pesan ramah>" }` |
+| `400` | Gemini menolak file (input tak diproses) | `{ "message": "File tidak dapat diproses oleh model. Coba file lain." }` |
 | `500` | Gagal memanggil Gemini | `{ "message": "<pesan error>" }` |
 
 ---
