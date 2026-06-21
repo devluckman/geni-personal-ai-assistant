@@ -1,0 +1,17 @@
+{
+  "name": "geni-personal-ai-assistant",
+  "version": "1.0.0",
+  "description": "Geni — Personal AI Assistant: chatbot Asisten Produktivitas berbasis Gemini 2.5 Flash",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@google/genai": "^1.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
+  }
+}

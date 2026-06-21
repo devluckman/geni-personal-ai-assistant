@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Geni — Personal AI Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">✦</div>
+        <div class="brand-text">
+          <span class="brand-name">Geni</span>
+          <span class="brand-sub">Asisten Produktivitas</span>
+        </div>
+      </div>
+
+      <button type="button" id="new-chat" class="new-chat">+ Mulai obrolan baru</button>
+
+      <div class="history-label">Terakhir</div>
+      <div class="history" id="history">
+        <div class="history-empty">Belum ada percakapan</div>
+      </div>
+
+      <div class="user">
+        <div class="user-avatar">LH</div>
+        <span class="user-name">Lukman Hakim</span>
+      </div>
+    </aside>
+
+    <!-- ============ MAIN ============ -->
+    <main class="chat">
+      <!-- header -->
+      <header class="chat-header">
+        <div class="chat-header-mark">✦</div>
+        <div class="chat-header-text">
+          <div class="chat-header-title">Halo, Lukman 👋</div>
+          <div class="chat-header-sub">Aku bantu rapikan tulisan kerjamu</div>
+        </div>
+        <div class="tone" id="tone" role="tablist" aria-label="Nada tulisan">
+          <button type="button" class="tone-btn active" data-tone="formal">Formal</button>
+          <button type="button" class="tone-btn" data-tone="semi-formal">Semi</button>
+          <button type="button" class="tone-btn" data-tone="santai">Santai</button>
+        </div>
+      </header>
+
+      <!-- messages -->
+      <div id="chat-box" class="chat-box">
+        <!-- welcome / empty state (dihapus saat pesan pertama dikirim) -->
+        <div class="welcome" id="welcome">
+          <div class="welcome-mark">✦</div>
+          <h1 class="welcome-title">Halo, Lukman! 👋</h1>
+          <p class="welcome-sub">Mau nulis apa hari ini? Pilih salah satu di bawah atau ketik langsung.</p>
+          <div class="welcome-chips">
+            <button type="button" class="chip" data-prompt="Tolong buatkan draft email untuk ">✉ Buat email</button>
+            <button type="button" class="chip" data-prompt="Tolong ringkas teks berikut: ">✦ Ringkas teks</button>
+            <button type="button" class="chip" data-prompt="Ubah nada pesan ini menjadi lebih sopan: ">↻ Ubah nada</button>
+            <button type="button" class="chip" data-prompt="Bantu saya membalas pesan ini: ">💬 Balas pesan</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- composer -->
+      <footer class="composer">
+        <div class="quick-chips" id="quick-chips">
+          <button type="button" class="chip chip-sm" data-prompt="Tolong buatkan draft email untuk ">✉ Buat email</button>
+          <button type="button" class="chip chip-sm" data-prompt="Tolong ringkas teks berikut: ">✦ Ringkas</button>
+          <button type="button" class="chip chip-sm" data-prompt="Ubah nada tulisan ini: ">↻ Ubah nada</button>
+          <button type="button" class="chip chip-sm" data-prompt="Bantu saya membalas pesan ini: ">💬 Balas pesan</button>
+        </div>
+        <form id="chat-form" class="input-row">
+          <input type="text" id="user-input" placeholder="Tulis sesuatu…" autocomplete="off" required />
+          <button type="submit" id="send-btn" class="send" aria-label="Kirim">➤</button>
+        </form>
+      </footer>
+    </main>
+
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
