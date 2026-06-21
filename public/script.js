@@ -117,7 +117,7 @@ function appendMessage(sender, text) {
     wrap.className = 'bubble-wrap';
     const bubble = document.createElement('div');
     bubble.className = 'bubble bot';
-    bubble.textContent = text;
+    setBotContent(bubble, text);
     wrap.appendChild(bubble);
     wrap.appendChild(makeActions(bubble));
     row.appendChild(wrap);
@@ -156,7 +156,7 @@ function replaceTyping(row, text, withActions = false) {
   wrap.innerHTML = '';
   const bubble = document.createElement('div');
   bubble.className = 'bubble bot';
-  bubble.textContent = text;
+  setBotContent(bubble, text);
   wrap.appendChild(bubble);
   if (withActions) wrap.appendChild(makeActions(bubble));
   scrollToBottom();
@@ -178,7 +178,7 @@ function makeActions(bubble) {
   copyBtn.type = 'button';
   copyBtn.textContent = '⧉ Salin';
   copyBtn.addEventListener('click', () => {
-    navigator.clipboard.writeText(bubble.textContent).then(() => {
+    navigator.clipboard.writeText(bubble.dataset.raw || bubble.textContent).then(() => {
       copyBtn.textContent = '✓ Disalin';
       copyBtn.classList.add('copied');
       setTimeout(() => {
@@ -209,4 +209,90 @@ function setSending(state) {
 
 function scrollToBottom() {
   chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+/* ---------- MARKDOWN ----------
+   Render jawaban bot (Gemini membalas dalam markdown). Aman dari XSS:
+   semua teks di-escape lebih dulu, tag yang dihasilkan hanya milik renderer. */
+function setBotContent(bubble, text) {
+  bubble.dataset.raw = text;          // simpan teks asli untuk tombol Salin
+  bubble.classList.add('md');
+  bubble.innerHTML = renderMarkdown(text);
+}
+
+function renderMarkdown(text) {
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const inline = (s) =>
+    s
+      .replace(/`([^`]+)`/g, (_, c) => '<code>' + c + '</code>')
+      .replace(/\*\*\*([^*]+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+      .replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/~~([^~]+?)~~/g, '<del>$1</del>')
+      .replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, '$1<em>$2</em>')
+      .replace(/(^|[^\w_])_([^_\n]+?)_(?![\w_])/g, '$1<em>$2</em>')
+      .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, t, u) =>
+        /^(https?:|mailto:)/i.test(u)
+          ? '<a href="' + u + '" target="_blank" rel="noopener noreferrer">' + t + '</a>'
+          : t,
+      );
+
+  const lines = esc(String(text).replace(/\r\n/g, '\n').replace(/\t/g, '    ')).split('\n');
+  let html = '';
+  let para = [];
+  let inFence = false;
+  let fence = [];
+  const stack = []; // [{ type:'ul'|'ol', indent:number }]
+
+  const flushPara = () => {
+    if (para.length) { html += '<p>' + inline(para.join(' ')) + '</p>'; para = []; }
+  };
+  const closeAll = () => { while (stack.length) html += '</li></' + stack.pop().type + '>'; };
+
+  for (const raw of lines) {
+    if (/^\s*```/.test(raw)) {
+      if (inFence) { html += '<pre><code>' + fence.join('\n') + '</code></pre>'; fence = []; inFence = false; }
+      else { flushPara(); closeAll(); inFence = true; }
+      continue;
+    }
+    if (inFence) { fence.push(raw); continue; }
+
+    if (/^\s*$/.test(raw)) { flushPara(); continue; }
+
+    const h = raw.match(/^\s*(#{1,6})\s+(.+?)\s*$/);
+    if (h) {
+      flushPara(); closeAll();
+      const lvl = Math.min(h[1].length + 2, 6);
+      html += '<h' + lvl + '>' + inline(h[2]) + '</h' + lvl + '>';
+      continue;
+    }
+
+    if (/^\s*([-*_])(?:\s*\1){2,}\s*$/.test(raw)) { flushPara(); closeAll(); html += '<hr>'; continue; }
+
+    const li = raw.match(/^(\s*)(?:([-*+])|(\d+)[.)])\s+(.+)$/);
+    if (li) {
+      flushPara();
+      const indent = li[1].length;
+      const type = li[2] ? 'ul' : 'ol';
+      while (stack.length && stack[stack.length - 1].indent > indent) {
+        html += '</li></' + stack.pop().type + '>';
+      }
+      const top = stack[stack.length - 1];
+      if (top && top.indent === indent) {
+        html += '</li>';
+        if (top.type !== type) { html += '</' + stack.pop().type + '>'; html += '<' + type + '>'; stack.push({ type, indent }); }
+      } else {
+        html += '<' + type + '>'; stack.push({ type, indent });
+      }
+      html += '<li>' + inline(li[4]);
+      continue;
+    }
+
+    closeAll();
+    para.push(raw.trim());
+  }
+  flushPara();
+  if (inFence) html += '<pre><code>' + fence.join('\n') + '</code></pre>';
+  closeAll();
+  return html;
 }

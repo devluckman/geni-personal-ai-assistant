@@ -265,6 +265,30 @@ body {
 /* tiny "disalin" toast feedback on copy button */
 .copied { color: #34a853 !important; }
 
+/* ---------------- MARKDOWN (jawaban bot) ---------------- */
+.bubble.bot.md { white-space: normal; }
+.bubble.bot.md > :first-child { margin-top: 0; }
+.bubble.bot.md > :last-child { margin-bottom: 0; }
+.bubble.bot.md p { margin: 0 0 10px; }
+.bubble.bot.md ul, .bubble.bot.md ol { margin: 8px 0; padding-left: 22px; }
+.bubble.bot.md li { margin: 4px 0; }
+.bubble.bot.md li > ul, .bubble.bot.md li > ol { margin: 4px 0; }
+.bubble.bot.md h3, .bubble.bot.md h4, .bubble.bot.md h5 {
+  margin: 14px 0 6px; font-size: 14.5px; font-weight: 800; color: var(--ink);
+}
+.bubble.bot.md strong { font-weight: 800; }
+.bubble.bot.md a { color: var(--blue-deep); text-decoration: underline; }
+.bubble.bot.md code {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12.5px;
+  background: rgba(120,90,50,.1); padding: 1px 5px; border-radius: 5px;
+}
+.bubble.bot.md pre {
+  background: rgba(120,90,50,.1); padding: 10px 12px; border-radius: 9px;
+  overflow-x: auto; margin: 8px 0; white-space: pre;
+}
+.bubble.bot.md pre code { background: none; padding: 0; }
+.bubble.bot.md hr { border: none; border-top: 1px solid var(--cream-line); margin: 12px 0; }
+
 /* ---------------- RESPONSIVE ---------------- */
 @media (max-width: 860px) {
   .sidebar { display: none; }
