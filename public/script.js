@@ -150,7 +150,15 @@ form.addEventListener('submit', async (e) => {
     });
 
     if (!res.ok) {
-      replaceTyping(thinkingEl, 'Failed to get response from server.');
+      // Untuk 400 (mis. file ditolak server: magic-byte/format), tampilkan pesan ramah dari backend.
+      let msg = 'Failed to get response from server.';
+      if (res.status === 400) {
+        try {
+          const err = await res.json();
+          if (err && err.message) msg = err.message;
+        } catch { /* abaikan: pakai pesan default */ }
+      }
+      replaceTyping(thinkingEl, msg);
       return;
     }
 
